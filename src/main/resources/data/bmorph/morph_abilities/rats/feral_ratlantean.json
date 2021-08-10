@@ -1,0 +1,10 @@
+{
+    "entity_type": "rats:feral_ratlantean",
+    "grant": [
+        "bmorph:night_vision",
+        "bmorph:swiftness",
+        "bmorph:more_damage",
+        "bmorph:mob_attack"
+    ],
+    "revoke": []
+}

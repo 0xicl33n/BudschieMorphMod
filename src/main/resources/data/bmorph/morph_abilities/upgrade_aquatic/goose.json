@@ -1,0 +1,11 @@
+{
+    "entity_type": "upgrade_aquatic:goose",
+    "grant": [
+        "bmorph:no_fall_damage",
+        "bmorph:bmorph:slowfall",
+        "bmorph:egg_yeet",
+        "bmorph:flying",
+        "bmorph:mob_attack"
+    ],
+    "revoke": []
+}

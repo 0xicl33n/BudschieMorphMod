@@ -1,0 +1,9 @@
+{
+    "entity_type": "alexsmobs:hammerhead_shark",
+    "grant": [
+        "bmorph:water_breathing",
+        "bmorph:more_damage",
+        "bmorph:mob_attack"
+    ],
+    "revoke": []
+}

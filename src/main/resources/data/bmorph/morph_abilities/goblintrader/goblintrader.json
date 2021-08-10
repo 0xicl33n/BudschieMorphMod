@@ -1,0 +1,8 @@
+{
+    "entity_type": "goblintraders:goblin_trader",
+    "grant": [
+        "bmorph:night_vision",
+        "bmorph:mob_attack"
+    ],
+    "revoke": []
+}

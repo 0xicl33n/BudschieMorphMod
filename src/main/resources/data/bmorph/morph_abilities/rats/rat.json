@@ -1,0 +1,9 @@
+{
+    "entity_type": "rats:rat",
+    "grant": [
+        "bmorph:night_vision",
+        "bmorph:swiftness",
+        "bmorph:mob_attack"
+    ],
+    "revoke": []
+}

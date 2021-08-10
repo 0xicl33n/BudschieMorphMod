@@ -1,0 +1,10 @@
+{
+    "entity_type": "alexsmobs:tasmanian_devil",
+    "grant": [
+        "bmorph:night_vision",
+        "bmorph:more_damage",
+        "bmorph:climbing",
+        "bmorph:mob_attack"
+    ],
+    "revoke": []
+}
