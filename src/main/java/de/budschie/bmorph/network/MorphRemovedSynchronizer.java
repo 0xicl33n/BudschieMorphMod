@@ -5,25 +5,41 @@ import java.util.function.Supplier;
 
 import de.budschie.bmorph.capabilities.IMorphCapability;
 import de.budschie.bmorph.capabilities.MorphCapabilityAttacher;
+import de.budschie.bmorph.gui.MorphGuiHandler;
 import de.budschie.bmorph.network.MorphRemovedSynchronizer.MorphRemovedPacket;
 import net.minecraft.client.Minecraft;
-import net.minecraft.network.PacketBuffer;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraftforge.common.util.LazyOptional;
-import net.minecraftforge.fml.network.NetworkEvent.Context;
+import net.minecraftforge.network.NetworkEvent.Context;
 
 public class MorphRemovedSynchronizer implements ISimpleImplPacket<MorphRemovedPacket>
 {
 	@Override
-	public void encode(MorphRemovedPacket packet, PacketBuffer buffer)
+	public void encode(MorphRemovedPacket packet, FriendlyByteBuf buffer)
 	{
-		buffer.writeUniqueId(packet.getPlayerUUID());
-		buffer.writeInt(packet.getRemovedMorph());
+		buffer.writeUUID(packet.getPlayerUUID());
+		buffer.writeInt(packet.getRemovedMorphKeys().length);
+		
+		for(UUID uuid : packet.getRemovedMorphKeys())
+		{
+			buffer.writeUUID(uuid);
+		}
 	}
 
 	@Override
-	public MorphRemovedPacket decode(PacketBuffer buffer)
+	public MorphRemovedPacket decode(FriendlyByteBuf buffer)
 	{
-		return new MorphRemovedPacket(buffer.readUniqueId(), buffer.readInt());
+		UUID player = buffer.readUUID();
+		int arrayLength = buffer.readInt();
+		
+		UUID[] removedMorphKeys = new UUID[arrayLength];
+		
+		for(int i = 0; i < arrayLength; i++)
+		{
+			removedMorphKeys[i] = buffer.readUUID();
+		}
+		
+		return new MorphRemovedPacket(player, removedMorphKeys);
 	}
 
 	@Override
@@ -31,13 +47,22 @@ public class MorphRemovedSynchronizer implements ISimpleImplPacket<MorphRemovedP
 	{
 		ctx.get().enqueueWork(() ->
 		{
-			LazyOptional<IMorphCapability> cap = Minecraft.getInstance().world.getPlayerByUuid(packet.getPlayerUUID()).getCapability(MorphCapabilityAttacher.MORPH_CAP);
-			
-			if(cap.isPresent())
+			if(Minecraft.getInstance().level != null)
 			{
-				IMorphCapability resolved = cap.resolve().get();
+				LazyOptional<IMorphCapability> cap = Minecraft.getInstance().level.getPlayerByUUID(packet.getPlayerUUID()).getCapability(MorphCapabilityAttacher.MORPH_CAP);
 				
-				resolved.removeFromMorphList(packet.getRemovedMorph());
+				if(cap.isPresent())
+				{
+					IMorphCapability resolved = cap.resolve().get();
+					
+					for(UUID removedMorphKey : packet.getRemovedMorphKeys())
+					{
+						resolved.getMorphList().removeMorphItem(removedMorphKey);
+					}
+				}
+				
+				MorphGuiHandler.updateMorphUi();
+				ctx.get().setPacketHandled(true);
 			}
 		});
 	}
@@ -45,17 +70,17 @@ public class MorphRemovedSynchronizer implements ISimpleImplPacket<MorphRemovedP
 	public static class MorphRemovedPacket
 	{
 		UUID playerUUID;
-		int removedMorph;
+		UUID[] removedMorphKeys;
 		
-		public MorphRemovedPacket(UUID playerUUID, int removedMorph)
+		public MorphRemovedPacket(UUID playerUUID, UUID... removedMorphKeys)
 		{
 			this.playerUUID = playerUUID;
-			this.removedMorph = removedMorph;
+			this.removedMorphKeys = removedMorphKeys;
 		}
 		
-		public int getRemovedMorph()
+		public UUID[] getRemovedMorphKeys()
 		{
-			return removedMorph;
+			return removedMorphKeys;
 		}
 		
 		public UUID getPlayerUUID()

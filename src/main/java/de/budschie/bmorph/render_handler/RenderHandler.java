@@ -2,160 +2,185 @@ package de.budschie.bmorph.render_handler;
 
 import java.util.ArrayList;
 import java.util.Optional;
-import java.util.UUID;
-import java.util.WeakHashMap;
+
+import com.mojang.blaze3d.vertex.PoseStack;
 
 import de.budschie.bmorph.api_interact.ShrinkAPIInteractor;
 import de.budschie.bmorph.capabilities.IMorphCapability;
 import de.budschie.bmorph.capabilities.MorphCapabilityAttacher;
-import de.budschie.bmorph.morph.AdvancedAbstractClientPlayerEntity;
+import de.budschie.bmorph.capabilities.client.render_data.IRenderDataCapability;
+import de.budschie.bmorph.capabilities.client.render_data.RenderDataCapabilityProvider;
 import de.budschie.bmorph.morph.MorphItem;
+import de.budschie.bmorph.morph.player.AdvancedAbstractClientPlayerEntity;
+import de.budschie.bmorph.tags.ModEntityTypeTags;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.entity.player.AbstractClientPlayerEntity;
-import net.minecraft.client.renderer.IRenderTypeBuffer.Impl;
-import net.minecraft.client.renderer.RenderType;
-import net.minecraft.client.renderer.RenderTypeBuffers;
-import net.minecraft.client.renderer.entity.BipedRenderer;
+import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.EntityRenderer;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.MobEntity;
-import net.minecraft.entity.monster.AbstractSkeletonEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.util.HandSide;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.HumanoidArm;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.Pose;
+import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.client.event.RenderHandEvent;
 import net.minecraftforge.client.event.RenderPlayerEvent;
-import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.common.util.LazyOptional;
+import net.minecraftforge.event.TickEvent.Phase;
+import net.minecraftforge.event.TickEvent.PlayerTickEvent;
 import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.LogicalSide;
 import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
+import net.minecraftforge.registries.ForgeRegistries;
 
 @EventBusSubscriber(value = Dist.CLIENT)
 public class RenderHandler
-{	
+{
+	private static boolean veryDodgyStackOverflowPreventionHackJesJes = false;
 	
-	public static WeakHashMap<UUID, Entity> cachedEntities = new WeakHashMap<>();
-	
-	private static boolean lock = false;
-	
+	// Setup the proxy entity when we initialize it
 	@SubscribeEvent
 	public static void onMorphInit(InitializeMorphEntityEvent event)
 	{		
 		if(event.getPlayer() == Minecraft.getInstance().player)
 			event.getMorphEntity().setCustomNameVisible(false);
 		
-		if(event.getMorphEntity() instanceof AbstractClientPlayerEntity)
-		{
-			AbstractClientPlayerEntity entity = (AbstractClientPlayerEntity) event.getMorphEntity();
-			
-			// WTF?!?
-			entity.setPrimaryHand(event.getPlayer().getPrimaryHand() == HandSide.LEFT ? HandSide.RIGHT : HandSide.LEFT);
-		}
+//		if(event.getMorphEntity() instanceof AbstractClientPlayer)
+//		{
+//			AbstractClientPlayer entity = (AbstractClientPlayer) event.getMorphEntity();
+//			
+//			// WTF?!?
+//			entity.setMainArm(event.getPlayer().getMainArm() == HumanoidArm.LEFT ? HumanoidArm.RIGHT : HumanoidArm.LEFT);
+//		}
 		
 		if(event.getMorphEntity() instanceof AdvancedAbstractClientPlayerEntity)
 		{
+			// What is this code that I produced??!? Plz send help...
 			AdvancedAbstractClientPlayerEntity advanced = (AdvancedAbstractClientPlayerEntity) event.getMorphEntity();
 			
 			// I LOVE lambdas!
-			advanced.setIsWearing(part -> event.getPlayer().isWearing(part));
+			advanced.setIsWearing(part -> event.getPlayer().isModelPartShown(part));
 		}
 		
-		if(event.getMorphEntity() instanceof MobEntity)
+		if(event.getMorphEntity() instanceof Mob mob)
 		{
-			if(event.getMorphEntity() instanceof AbstractSkeletonEntity)
-				((MobEntity)event.getMorphEntity()).setLeftHanded(event.getPlayer().getPrimaryHand() == HandSide.RIGHT);
-			else
-				((MobEntity)event.getMorphEntity()).setLeftHanded(event.getPlayer().getPrimaryHand() == HandSide.LEFT);
+			mob.setLeftHanded(event.getPlayer().getMainArm() == HumanoidArm.LEFT);
+		}
+		
+		if(event.getMorphEntity() instanceof LivingEntity living)
+		{
+			living.swingingArm = event.getPlayer().swingingArm;
 		}
 	}
 	
-	public static void checkCache(PlayerEntity player)
+	public static void onBuildNewEntity(Player player, IMorphCapability capability, MorphItem aboutToMorphTo)
 	{
-		IMorphCapability capability = player.getCapability(MorphCapabilityAttacher.MORPH_CAP).resolve().get();
+		IRenderDataCapability renderDataCapability = player.getCapability(RenderDataCapabilityProvider.RENDER_CAP).resolve().get();
 		
-		// Check if the entity is cached or if it should be updated
-		if(cachedEntities.get(player.getUniqueID()) == null || capability.isDirty())
-		{
-			Entity toCache = capability.getCurrentMorph().get().createEntity(player.world);
-			cachedEntities.put(player.getUniqueID(), toCache);
-			capability.cleanDirty();
-								
-			MinecraftForge.EVENT_BUS.post(new InitializeMorphEntityEvent(player, toCache));
-		}
+		renderDataCapability.invalidateCache();
 	}
 	
 	@SubscribeEvent(priority = EventPriority.HIGH)
 	public static void onRenderedHandler(RenderPlayerEvent.Pre event)
 	{
-		LazyOptional<IMorphCapability> morph = event.getPlayer().getCapability(MorphCapabilityAttacher.MORPH_CAP);
+		// TODO: Fix this mess EDIT: If I find a better way of doing this, I will implement it, but as of now, I wont
+		if(veryDodgyStackOverflowPreventionHackJesJes)
+			return;
 		
-		if(morph.isPresent())
+		veryDodgyStackOverflowPreventionHackJesJes = true;
+		IRenderDataCapability renderDataCapability = event.getPlayer().getCapability(RenderDataCapabilityProvider.RENDER_CAP).resolve().orElse(null);
+		
+		if(renderDataCapability != null)
 		{
-			Optional<MorphItem> currentMorph = morph.resolve().get().getCurrentMorph();
+			LazyOptional<IMorphCapability> morph = event.getPlayer().getCapability(MorphCapabilityAttacher.MORPH_CAP);
 			
-			if(currentMorph.isPresent())
+			if(renderDataCapability.hasAnimation())
 			{
+				renderDataCapability.renderAnimation(event.getPlayer(), event.getPoseStack(), event.getPartialTick(), event.getMultiBufferSource(), event.getPackedLight());
 				event.setCanceled(true);
-
-				PlayerEntity player = event.getPlayer();
+			}
+			else if(morph.isPresent())
+			{
+				Optional<MorphItem> currentMorph = morph.resolve().get().getCurrentMorph();
 				
-				checkCache(player);
-				
-				Entity toRender = cachedEntities.get(player.getUniqueID());
-				
-				if(toRender == null || morph.resolve().get().isDirty())
+				if(currentMorph.isPresent())
 				{
+					event.setCanceled(true);
+	
+					Player player = event.getPlayer();					
+					Entity toRender = renderDataCapability.getOrCreateCachedEntity(player);
+					
+					renderDataCapability.getOrCreateCachedRotationSynchronizers(player).forEach(rotationSync -> rotationSync.updateMorphRotation(toRender, player));
+					renderMorph(player, toRender, event.getPoseStack(), event.getPartialTick(), event.getMultiBufferSource(), event.getPackedLight());
+				}
+			}			
+		}
+		
+		veryDodgyStackOverflowPreventionHackJesJes = false;
+	}
+	
+	@SubscribeEvent
+	public static void onPlayerTick(PlayerTickEvent event)
+	{
+		if(event.side == LogicalSide.CLIENT && event.phase == Phase.END)
+		{
+			// Retrieve the player's IRenderDataCapability
+			
+			IRenderDataCapability renderDataCapability = event.player.getCapability(RenderDataCapabilityProvider.RENDER_CAP).resolve().orElse(null);
+			
+			if(renderDataCapability != null)
+			{
+				renderDataCapability.tickAnimation();
+				
+				ArrayList<IEntitySynchronizer> syncs = renderDataCapability.getOrCreateCachedSynchronizers(event.player);
+				
+				Entity entity = renderDataCapability.getOrCreateCachedEntity(event.player);
+				
+				// Apply all syncs.
+				if(syncs != null)
+				{
+					syncs.forEach(sync -> sync.applyToMorphEntity(entity, event.player));
 				}
 				
-				if(toRender.world != player.world)
+				// Tick the entity
+				
+				if(entity != null)
 				{
-					toRender.setWorld(toRender.world);
+					entity.tick();
 				}
 				
-				ArrayList<IEntitySynchronizer> list = EntitySynchronizerRegistry.getSynchronizers();
-				
-				for(IEntitySynchronizer sync : list)
+				if(syncs != null)
 				{
-					if(sync.appliesToMorph(toRender))
-						sync.applyToMorphEntity(toRender, player);
+					syncs.forEach(sync -> sync.applyToMorphEntityPostTick(entity, event.player));
 				}
-				
-				toRender.ticksExisted = player.ticksExisted;
-				
-				toRender.setPosition(player.getPosX(), player.getPosY(), player.getPosZ());
-				
-				toRender.prevPosX = player.prevPosX;
-				toRender.prevPosY = player.prevPosY;
-				toRender.prevPosZ = player.prevPosZ;
-				
-				toRender.rotationPitch = player.rotationPitch;
-				toRender.rotationYaw = player.rotationYaw;
-				toRender.rotationPitch = player.rotationPitch;
-				toRender.prevRotationPitch = player.prevRotationPitch;
-				
-				toRender.rotationYaw = player.rotationYaw;
-				toRender.prevRotationYaw = player.prevRotationYaw;
-				
-				float divisor = ShrinkAPIInteractor.getInteractor().getShrinkingValue(player);
-				
-				event.getMatrixStack().push();
-				
-				if(ShrinkAPIInteractor.getInteractor().isShrunk(player))
-					event.getMatrixStack().scale(0.81f / divisor, 0.81f / divisor, 0.81f / divisor);
-				
-				if(player.isCrouching() && ShrinkAPIInteractor.getInteractor().isShrunk(player))
-					event.getMatrixStack().translate(0, 1, 0);
-							
-				
-				// info: We are getting NOTEX when displaying tVariant render thingys by better animals plus https://github.com/itsmeow/betteranimalsplus/blob/1.16/src/main/java/its_meow/betteranimalsplus/client/ClientLifecycleHandler.java
-				// NOTE: This does not occur when using tSingle...
-				EntityRenderer<? super Entity> manager = Minecraft.getInstance().getRenderManager().getRenderer(toRender);
-				//System.out.println(texture);
-				manager.render(toRender, 0, event.getPartialRenderTick(), event.getMatrixStack(), event.getBuffers(), event.getLight());
-				
-				event.getMatrixStack().pop();
 			}
 		}
+	}
+	
+	public static void renderMorph(Player player, Entity toRender, PoseStack matrixStack, float partialRenderTicks, MultiBufferSource buffers, int light)
+	{			
+		float divisor = ShrinkAPIInteractor.getInteractor().getShrinkingValue(player);
+		
+		matrixStack.pushPose();
+		
+		if(ShrinkAPIInteractor.getInteractor().isShrunk(player))
+			matrixStack.scale(0.81f / divisor, 0.81f / divisor, 0.81f / divisor);
+		
+		if(toRender.isCrouching() && ShrinkAPIInteractor.getInteractor().isShrunk(player))
+			matrixStack.translate(0, 1, 0);
+		
+		// If we are crouching and we should not move down, offset the player up again.
+		if(player.isCrouching() && ForgeRegistries.ENTITIES.tags().getTag(ModEntityTypeTags.DISABLE_SNEAK_TRANSFORM).contains(toRender.getType()))
+		{
+			toRender.setPose(Pose.STANDING);
+			matrixStack.translate(0, 0.125D, 0);
+		}
+		
+		// info: We are getting NOTEX when displaying tVariant render thingys by better animals plus https://github.com/itsmeow/betteranimalsplus/blob/1.16/src/main/java/its_meow/betteranimalsplus/client/ClientLifecycleHandler.java
+		// NOTE: This does not occur when using tSingle...
+		EntityRenderer<? super Entity> manager = Minecraft.getInstance().getEntityRenderDispatcher().getRenderer(toRender);
+		manager.render(toRender, 0, partialRenderTicks, matrixStack, buffers, manager.getPackedLightCoords(toRender, partialRenderTicks));
+		
+		matrixStack.popPose();
 	}
 }

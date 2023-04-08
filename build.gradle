@@ -4,27 +4,33 @@ buildscript {
             url = 'https://maven.minecraftforge.net'
         }
         
-         maven { url = "https://repo.spongepowered.org/maven" }
+        maven { url = 'https://maven.parchmentmc.org' }
+        
+         // maven { url = "https://repo.spongepowered.org/maven" }
 
         mavenCentral()
     }
 
     dependencies {
-        classpath group: 'net.minecraftforge.gradle', name: 'ForgeGradle', version: '4.1.+', changing: true
-        classpath 'org.spongepowered:mixingradle:0.7-SNAPSHOT'    
+        classpath group: 'net.minecraftforge.gradle', name: 'ForgeGradle', version: '5.1.+', changing: true
+        classpath 'org.spongepowered:mixingradle:0.7.+'
+        classpath 'org.parchmentmc:librarian:1.+'
     }
 }
 apply plugin: 'net.minecraftforge.gradle'
 apply plugin: 'org.spongepowered.mixin'
+apply plugin: 'org.parchmentmc.librarian.forgegradle'
 // Only edit below this line, the above code adds and enables the necessary things for Forge to be setup.
 apply plugin: 'eclipse'
 apply plugin: 'maven-publish'
 
-version = '1.16.5-1.4.1'
+// apply from: 'https://raw.githubusercontent.com/SizableShrimp/Forge-Class-Remapper/main/classremapper.gradle'
+
+version = '1.18.2-2.0.1'
 group = 'de.budschie.bmorph' // http://maven.apache.org/guides/mini/guide-naming-conventions.html
 archivesBaseName = 'bmorph'
 
-java.toolchain.languageVersion = JavaLanguageVersion.of(8) // Mojang ships Java 8 to end users, so your mod should target Java 8.
+java.toolchain.languageVersion = JavaLanguageVersion.of(17) // Mojang ships Java 16 to end users, so your mod should target Java 8.
 
 println('Java: ' + System.getProperty('java.version') + ' JVM: ' + System.getProperty('java.vm.version') + '(' + System.getProperty('java.vendor') + ') Arch: ' + System.getProperty('os.arch'))
 minecraft {
@@ -39,7 +45,7 @@ minecraft {
     //
     // Use non-default mappings at your own risk. they may not always work.
     // Simply re-run your setup task after changing the mappings to update your workspace.
-    mappings channel: 'snapshot', version: '20210309-1.16.5'
+	mappings channel: 'parchment', version: '2022.03.13-1.18.2'
     // makeObfSourceJar = false // an Srg named sources jar is made by default. uncomment this to disable.
 
     accessTransformer = file('src/main/resources/META-INF/accesstransformer.cfg')
@@ -49,8 +55,6 @@ minecraft {
     runs {
         client {
             workingDirectory project.file('run')
-            
-            arg "-mixin.config=bmorph.mixins.json"
 
             // Recommended logging data for a userdev environment
             // The markers can be changed as needed.
@@ -66,10 +70,13 @@ minecraft {
 
             property 'mixin.env.remapRefMap', 'true'
             property 'mixin.env.refMapRemappingFile', "${buildDir}/createSrgToMcp/output.srg"
+            
+            property 'forge.enabledGameTestNamespaces', 'bmorph'
 
             mods {
                 bmorph {
                     source sourceSets.main
+                    source sourceSets.test
                 }
             }
         }
@@ -92,7 +99,7 @@ minecraft {
             property 'mixin.env.remapRefMap', 'true'
             property 'mixin.env.refMapRemappingFile', "${buildDir}/createSrgToMcp/output.srg"
             
-            arg "-mixin.config=bmorph.mixins.json"
+            property 'forge.enabledGameTestNamespaces', 'bmorph'
 
             mods {
                 bmorph {
@@ -100,6 +107,36 @@ minecraft {
                 }
             }
         }
+        
+        // This run config launches GameTestServer and runs all registered gametests, then exits.
+        // By default, the server will crash when no gametests are provided.
+        // The gametest system is also enabled by default for other run configs under the /test command.
+        gameTestServer {
+            workingDirectory project.file('run')
+
+            // Recommended logging data for a userdev environment
+            // The markers can be added/remove as needed separated by commas.
+            // "SCAN": For mods scan.
+            // "REGISTRIES": For firing of registry events.
+            // "REGISTRYDUMP": For getting the contents of all registries.
+            property 'forge.logging.markers', 'REGISTRIES'
+
+            // Recommended logging level for the console
+            // You can set various levels here.
+            // Please read: https://stackoverflow.com/questions/2031163/when-to-use-the-different-log-levels
+            property 'forge.logging.console.level', 'debug'
+
+            // Comma-separated list of namespaces to load gametests from. Empty = all namespaces.
+            property 'forge.enabledGameTestNamespaces', 'bmorph'
+
+            mods {
+                bmorph {
+                    source sourceSets.main
+                    source sourceSets.test
+                }
+            }
+        }
+        
 
         data {
             workingDirectory project.file('run')
@@ -120,7 +157,7 @@ minecraft {
             property 'mixin.env.refMapRemappingFile', "${buildDir}/createSrgToMcp/output.srg"
 
             // Specify the modid for data generation, where to output the resulting resource, and where to look for existing resources.
-            args '--mod', 'bmorph', '--all', '--output', file('src/generated/resources/'), '--existing', '-mixin.config=bmorph.mixins.json', file('src/main/resources/')
+            args '--mod', 'bmorph', '--all', '--output', file('src/generated/resources/'), '--existing', file('src/main/resources/')
 
             mods {
                 bmorph {
@@ -133,10 +170,15 @@ minecraft {
 
 mixin {
     add sourceSets.main, "bmorph.refmap.json"
+    config 'bmorph.mixins.json'
 }
 
 // Include resources generated by data generators.
-sourceSets.main.resources { srcDir 'src/generated/resources' }
+sourceSets.main.resources { 
+	srcDir 'src/generated/resources'
+	exclude '**/*.psd' 
+	exclude '**/*.kra' 
+}
 
 repositories {
         maven {
@@ -151,17 +193,29 @@ dependencies {
     // Specify the version of Minecraft to use, If this is any group other then 'net.minecraft' it is assumed
     // that the dep is a ForgeGradle 'patcher' dependency. And it's patches will be applied.
     // The userdev artifact is a special name and will get all sorts of transformations applied to it.
-    minecraft 'net.minecraftforge:forge:1.16.5-36.2.2'
+    minecraft 'net.minecraftforge:forge:1.18.2-40.1.84'
 
-    implementation fg.deobf("curse.maven:shrink-426386:3162514")
-    implementation fg.deobf("curse.maven:quark-243121:3394265")
-    implementation fg.deobf("curse.maven:autoreglib-250363:3326041")
+    // implementation fg.deobf("curse.maven:shrink-426386:3458658")
+    // implementation fg.deobf("curse.maven:quark-243121:3394265")
+    // implementation fg.deobf("curse.maven:autoreglib-250363:3326041")
     // implementation fg.deobf("curse.maven:iceandfire-264231:3361256")
-    implementation fg.deobf("curse.maven:citadel-331936:3390028")
-    implementation fg.deobf("curse.maven:betteranimalsplus-054919:3286395")
-    implementation fg.deobf("curse.maven:rats-323596:3319810")
+    // implementation fg.deobf("curse.maven:citadel-331936:3390028")
+    // implementation fg.deobf("curse.maven:betteranimalsplus-054919:3286395")
+    // implementation fg.deobf("curse.maven:rats-323596:3319810")
     
-    annotationProcessor 'org.spongepowered:mixin:0.8:processor'
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+
+	implementation fg.deobf("curse.maven:shrink-426386:3696155")
+	implementation fg.deobf("curse.maven:betteranimalsplus-303557:3680864")
+	// implementation fg.deobf("curse.maven:firstpersonmodel-333287:3556530")
+	
+	// Deps of betteranimalsplus mod
+	implementation fg.deobf("curse.maven:architectury-419699:3728618")
+	implementation fg.deobf("curse.maven:curios-309927:3670447")
+	
+	implementation fg.deobf("curse.maven:artifacts-312353:3736897")
+	implementation fg.deobf("curse.maven:expandability-465066:3678612")
+	
         
     // You may put jars on which you depend on in ./libs or you may define them like so..
     // compile "some.group:artifact:version:classifier"
@@ -199,7 +253,7 @@ jar {
         ])
     }
     
-    rename 'mixin.refmap.json', 'bmorph-refmap.json'
+    rename 'mixin.refmap.json', 'bmorph.refmap.json'
 }
 
 // Example configuration to allow publishing using the maven-publish task

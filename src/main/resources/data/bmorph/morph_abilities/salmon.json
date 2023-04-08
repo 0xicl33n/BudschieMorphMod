@@ -2,7 +2,7 @@
     "entity_type": "minecraft:salmon",
     "grant":
     [
-        "bmorph:water_breathing"
+        "#bmorph:normal_fish"
     ],
     "revoke":
     [

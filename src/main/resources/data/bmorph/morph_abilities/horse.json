@@ -2,8 +2,8 @@
     "entity_type": "minecraft:horse",
     "grant":
     [
-        "bmorph:insta_jump",
-        "bmorph:swiftness",
+        "bmorph:higher_insta_jump",
+        "#bmorph:speed_changes/swiftness",
         "bmorph:jumpboost"
     ],
     "revoke":

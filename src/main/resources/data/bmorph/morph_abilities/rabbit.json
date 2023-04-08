@@ -3,8 +3,9 @@
     "grant":
     [
         "bmorph:no_fall_damage",
-        "bmorph:swiftness",
-        "bmorph:jumpboost"
+        "#bmorph:speed_changes/swiftness",
+        "bmorph:jumpboost",
+        "bmorph:walk_on_powder_snow"
     ],
     "revoke":
     [

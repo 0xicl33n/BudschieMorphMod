@@ -1,74 +1,82 @@
 package de.budschie.bmorph.network;
 
+import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import de.budschie.bmorph.capabilities.IMorphCapability;
 import de.budschie.bmorph.capabilities.MorphCapabilityAttacher;
+import de.budschie.bmorph.morph.FavouriteList;
 import de.budschie.bmorph.morph.MorphHandler;
-import de.budschie.bmorph.morph.MorphItem;
 import de.budschie.bmorph.morph.MorphList;
+import de.budschie.bmorph.morph.MorphReason;
+import de.budschie.bmorph.morph.MorphReasonRegistry;
 import de.budschie.bmorph.morph.MorphUtil;
-import de.budschie.bmorph.morph.functionality.Ability;
 import de.budschie.bmorph.network.MorphCapabilityFullSynchronizer.MorphPacket;
 import net.minecraft.client.Minecraft;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.nbt.CompoundNBT;
-import net.minecraft.network.PacketBuffer;
-import net.minecraft.util.ResourceLocation;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.common.util.LazyOptional;
-import net.minecraftforge.fml.common.registry.GameRegistry;
-import net.minecraftforge.fml.network.NetworkEvent;
-import net.minecraftforge.registries.IForgeRegistry;
+import net.minecraftforge.network.NetworkEvent;
 
 public class MorphCapabilityFullSynchronizer implements ISimpleImplPacket<MorphPacket>
 {
+	private static final Logger LOGGER = LogManager.getLogger();
+	
 	@Override
-	public void encode(MorphPacket packet, PacketBuffer buffer)
+	public void encode(MorphPacket packet, FriendlyByteBuf buffer)
 	{		
-		buffer.writeUniqueId(packet.player);
+		buffer.writeUUID(packet.player);
 		packet.morphList.serializePacket(buffer);
-		buffer.writeBoolean(packet.entityData.isPresent());
-		buffer.writeBoolean(packet.entityIndex.isPresent());
-		packet.getEntityData().ifPresent(data -> buffer.writeCompoundTag(data.serialize()));
-		packet.getEntityIndex().ifPresent(data -> buffer.writeInt(data));
+		packet.favouriteList.serializePacket(buffer);
+		buffer.writeBoolean(packet.morphItemNbt.isPresent());
+		packet.getMorphItemNbt().ifPresent(data -> buffer.writeNbt(data));
+		buffer.writeResourceLocation(packet.getReason());
 		
 		buffer.writeInt(packet.getAbilities().size());
 		
 		for(String str : packet.getAbilities())
-			buffer.writeString(str);
+			buffer.writeUtf(str);
 	}
 	
 	@Override
-	public MorphPacket decode(PacketBuffer buffer)
+	public MorphPacket decode(FriendlyByteBuf buffer)
 	{
-		UUID playerUUID = buffer.readUniqueId();
+		UUID playerUUID = buffer.readUUID();
 		
 		// Hmmm yeah the floor is made out of floor
 		MorphList morphList = new MorphList();
 		morphList.deserializePacket(buffer);
 		
-		Optional<MorphItem> toMorph = Optional.empty();
-		Optional<Integer> entityIndex = Optional.empty();
+		FavouriteList favouriteList = new FavouriteList(morphList);
+		favouriteList.deserializePacket(buffer);
 		
-		boolean hasMorph = buffer.readBoolean(), hasIndex = buffer.readBoolean();
+		Optional<CompoundTag> toMorph = Optional.empty();
+		
+		boolean hasMorph = buffer.readBoolean();
 		
 		if(hasMorph)
-			toMorph = Optional.of(MorphHandler.deserializeMorphItem(buffer.readCompoundTag()));
+		{
+			toMorph = Optional.of(buffer.readNbt());
+		}
 		
-		if(hasIndex)
-			entityIndex = Optional.of(buffer.readInt());
+		ResourceLocation reason = buffer.readResourceLocation();
 		
 		int amountOfAbilities = buffer.readInt();
 		
 		ArrayList<String> abilities = new ArrayList<>(amountOfAbilities);
 		
 		for(int i = 0; i < amountOfAbilities; i++)
-			abilities.add(buffer.readString());
+			abilities.add(buffer.readUtf());
 		
-		return new MorphPacket(toMorph, entityIndex, morphList, abilities, playerUUID);
+		return new MorphPacket(toMorph, reason, morphList, favouriteList, abilities, playerUUID);
 	}
 	
 	@Override
@@ -76,35 +84,53 @@ public class MorphCapabilityFullSynchronizer implements ISimpleImplPacket<MorphP
 	{
 		ctx.get().enqueueWork(() ->
 		{
-			PlayerEntity player = Minecraft.getInstance().world.getPlayerByUuid(packet.getPlayer());
-			
-			if(player != null)
+			if(Minecraft.getInstance().level != null)
 			{
-				LazyOptional<IMorphCapability> cap = player.getCapability(MorphCapabilityAttacher.MORPH_CAP);
-				if(cap.isPresent())
+				Player player = Minecraft.getInstance().level.getPlayerByUUID(packet.getPlayer());
+				
+				MorphReason reason;
+				
+				MorphReason registryReason = MorphReasonRegistry.REGISTRY.get().getValue(packet.getReason());
+				reason = registryReason;
+					
+				if(registryReason == null)
 				{
-					IMorphCapability resolved = cap.resolve().get();
-					resolved.setMorphList(packet.getMorphList());
+					LOGGER.warn(MessageFormat.format("Unknown morph reason {0} received from server. Default reason will be used.", packet.getReason()));
 				}
-				MorphUtil.morphToClient(packet.getEntityData(), packet.getEntityIndex(), packet.getAbilities(), player);	
+				
+				if(player != null)
+				{
+					LazyOptional<IMorphCapability> cap = player.getCapability(MorphCapabilityAttacher.MORPH_CAP);
+					if(cap.isPresent())
+					{
+						IMorphCapability resolved = cap.resolve().get();
+						resolved.setFavouriteList(packet.getFavouriteList());
+						resolved.setMorphList(packet.getMorphList());
+					}
+					// MorphUtil.morphToClient(packet.getEntityData(), packet.getEntityIndex(), packet.getAbilities(), player);
+					MorphUtil.morphToClient(packet.getMorphItemNbt().map(MorphHandler::deserializeMorphItem), reason == null ? MorphReasonRegistry.MORPHED_BY_COMMAND.get() : reason, packet.getAbilities(), player);
+					ctx.get().setPacketHandled(true);
+				}
 			}
 		});
 	}
 	
 	public static class MorphPacket
 	{
-		private Optional<MorphItem> entityData;
-		private Optional<Integer> entityIndex;
+		private Optional<CompoundTag> morphItemNbt;
+		private ResourceLocation reason;
 		private MorphList morphList;
+		private FavouriteList favouriteList;
 		private ArrayList<String> abilities;
 		private UUID player;
 		
-		public MorphPacket(Optional<MorphItem> entityData, Optional<Integer> entityIndex, MorphList morphList, ArrayList<String> abilities, UUID player)
+		public MorphPacket(Optional<CompoundTag> morphItemNbt, ResourceLocation reason, MorphList morphList, FavouriteList favouriteList, ArrayList<String> abilities, UUID player)
 		{
-			this.entityData = entityData;
+			this.morphItemNbt = morphItemNbt;
+			this.reason = reason;
 			this.player = player;
 			this.morphList = morphList;
-			this.entityIndex = entityIndex;
+			this.favouriteList = favouriteList;
 			this.abilities = abilities;
 		}
 		
@@ -113,9 +139,14 @@ public class MorphCapabilityFullSynchronizer implements ISimpleImplPacket<MorphP
 			return abilities;
 		}
 		
-		public Optional<MorphItem> getEntityData()
+		public ResourceLocation getReason()
 		{
-			return entityData;
+			return reason;
+		}
+		
+		public Optional<CompoundTag> getMorphItemNbt()
+		{
+			return morphItemNbt;
 		}
 		
 		public UUID getPlayer()
@@ -128,9 +159,9 @@ public class MorphCapabilityFullSynchronizer implements ISimpleImplPacket<MorphP
 			return morphList;
 		}
 		
-		public Optional<Integer> getEntityIndex()
+		public FavouriteList getFavouriteList()
 		{
-			return entityIndex;
+			return favouriteList;
 		}
 	}
 }

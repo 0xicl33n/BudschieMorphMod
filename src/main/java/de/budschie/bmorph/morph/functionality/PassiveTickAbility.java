@@ -1,62 +1,68 @@
 package de.budschie.bmorph.morph.functionality;
 
-import java.util.HashSet;
 import java.util.UUID;
 import java.util.function.BiConsumer;
 
 import de.budschie.bmorph.capabilities.IMorphCapability;
 import de.budschie.bmorph.capabilities.MorphCapabilityAttacher;
 import de.budschie.bmorph.main.ServerSetup;
-import de.budschie.bmorph.morph.MorphItem;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraftforge.common.MinecraftForge;
+import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.common.util.LazyOptional;
+import net.minecraftforge.event.TickEvent.Phase;
 import net.minecraftforge.event.TickEvent.ServerTickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.event.server.FMLServerStoppingEvent;
+import net.minecraftforge.server.ServerLifecycleHooks;
 
-public class PassiveTickAbility extends AbstractEventAbility 
+public class PassiveTickAbility extends Ability 
 {
 	private int updateDuration = 0;
 	private int lastUpdate = 0;
-	private BiConsumer<PlayerEntity, IMorphCapability> handleUpdate;
+	private BiConsumer<Player, IMorphCapability> handleUpdate;
 	
-	public PassiveTickAbility(int updateDuration, BiConsumer<PlayerEntity, IMorphCapability> handleUpdate)
+	public PassiveTickAbility(int updateDuration, BiConsumer<Player, IMorphCapability> handleUpdate)
 	{
 		this.updateDuration = updateDuration;
 		this.handleUpdate = handleUpdate;
 	}
 	
+	public int getUpdateDuration()
+	{
+		return updateDuration;
+	}
+	
 	@SubscribeEvent
 	public void onServerTick(ServerTickEvent event)
 	{
-		int tickCounter = ServerSetup.server.getTickCounter();
-		
-		if((lastUpdate + updateDuration) >= tickCounter)
+		if(event.phase == Phase.START)
 		{
-			lastUpdate = tickCounter;
+			int tickCounter = ServerLifecycleHooks.getCurrentServer().getTickCount();
 			
-			for(UUID uuid : trackedPlayers)
+			if(tickCounter >= (lastUpdate + updateDuration))
 			{
-				PlayerEntity player = ServerSetup.server.getPlayerList().getPlayerByUUID(uuid);
+				lastUpdate = tickCounter;
 				
-				if(player != null)
+				for(UUID uuid : trackedPlayers)
 				{
-					LazyOptional<IMorphCapability> cap = player.getCapability(MorphCapabilityAttacher.MORPH_CAP);
+					Player player = ServerLifecycleHooks.getCurrentServer().getPlayerList().getPlayer(uuid);
 					
-					if(cap.isPresent())
+					if(player != null)
 					{
-						IMorphCapability resolved = cap.resolve().get();
-						handleUpdate.accept(player, resolved);
+						LazyOptional<IMorphCapability> cap = player.getCapability(MorphCapabilityAttacher.MORPH_CAP);
+						
+						if(cap.isPresent())
+						{
+							IMorphCapability resolved = cap.resolve().get();
+							handleUpdate.accept(player, resolved);
+						}
 					}
 				}
 			}
 		}
 	}
-
+	
 	@Override
-	public void onUsedAbility(PlayerEntity player, MorphItem currentMorph)
+	public boolean isAbleToReceiveEvents()
 	{
-		
+		return true;
 	}
 }

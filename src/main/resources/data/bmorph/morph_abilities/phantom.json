@@ -1,0 +1,14 @@
+{
+    "entity_type": "minecraft:phantom",
+    "grant":
+    [
+        "bmorph:night_vision",
+        "bmorph:burn_in_sun_ignore_hat",
+        "bmorph:phantom_glide_ability",
+        "bmorph:no_fall_damage"
+    ],
+    "revoke":
+    [
+
+    ]
+}

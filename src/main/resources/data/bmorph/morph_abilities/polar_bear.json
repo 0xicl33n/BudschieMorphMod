@@ -2,7 +2,9 @@
     "entity_type": "minecraft:polar_bear",
     "grant":
     [
-        "bmorph:fish_yeet"
+        "bmorph:fish_yeet",
+        "bmorph:water_sanic",
+        "bmorph:no_freezing"
     ],
     "revoke":
     [

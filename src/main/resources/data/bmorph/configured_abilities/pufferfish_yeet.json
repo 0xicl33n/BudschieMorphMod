@@ -1,0 +1,19 @@
+{
+    "ability": "bmorph:shoot_projectile",
+    "config":
+    {
+        "projectile_entity": "minecraft:pufferfish",
+        "stun": 0,
+        "motion": 1,
+        "audiovisual_effect":
+        {
+            "sounds":
+            [
+                {
+                    "sound": "minecraft:entity.llama.spit",
+                    "pitch": 0.9
+                }
+            ]
+        }
+    }
+}

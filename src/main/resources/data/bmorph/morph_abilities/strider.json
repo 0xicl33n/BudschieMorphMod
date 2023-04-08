@@ -1,0 +1,14 @@
+{
+    "entity_type": "minecraft:strider",
+    "grant":
+    [
+        "bmorph:lava_jesus",
+        "bmorph:water_dislike",
+        "bmorph:speed_changes/slowness_if_not_in_lava",
+        "#bmorph:fire_immunity"
+    ],
+    "revoke":
+    [
+
+    ]
+}

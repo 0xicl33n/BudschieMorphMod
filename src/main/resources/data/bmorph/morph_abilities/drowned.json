@@ -2,7 +2,9 @@
     "entity_type": "minecraft:drowned",
     "grant":
     [
-        "bmorph:water_breathing"
+        "bmorph:water_breathing",
+        "bmorph:burn_in_sun",
+        "bmorph:transformations/turn_to_zombie_as_drowned"
     ],
     "revoke":
     [

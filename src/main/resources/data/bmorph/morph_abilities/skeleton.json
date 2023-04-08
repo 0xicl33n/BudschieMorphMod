@@ -1,0 +1,14 @@
+{
+    "entity_type": "minecraft:skeleton",
+    "grant":
+    [
+        "bmorph:burn_in_sun",
+        "bmorph:no_freezing",
+        "bmorph:transformations/turn_to_stray_as_skeleton",
+        "bmorph:riding/ride_spider"
+    ],
+    "revoke":
+    [
+
+    ]
+}

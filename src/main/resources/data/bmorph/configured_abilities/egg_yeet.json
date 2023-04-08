@@ -1,0 +1,19 @@
+{
+    "ability": "bmorph:shoot_projectile",
+    "config":
+    {
+        "projectile_entity": "minecraft:egg",
+        "stun": 5,
+        "motion": 1.5,
+        "audiovisual_effect":
+        {
+            "sounds":
+            [
+                {
+                    "sound": "minecraft:entity.egg.throw",
+                    "pitch": 0.0
+                }
+            ]
+        }
+    }
+}

@@ -1,0 +1,47 @@
+{
+    "ability": "bmorph:sheep_eat_grass",
+    "config":
+    {
+        "shear_effect":
+        {
+            "sounds":
+            [
+                {
+                    "sound": "minecraft:entity.sheep.shear"
+                }
+            ]
+        },
+        "consume_grass_effect":
+        {
+            "sounds":
+            [
+                {
+                    "sound": "minecraft:block.grass.break"
+                }
+            ]
+        },
+        "saturated_effect":
+        {
+            "sounds":
+            [
+                {
+                    "sound": "minecraft:entity.sheep.ambient",
+                    "pitch": 0.69
+                }
+            ]
+        },
+        "valid_directions": [ "up" ],
+        "valid_eatable_block": "minecraft:grass_block",
+        "transform_to_block":
+        {
+            "type": "simple_state_provider",
+            "state":
+            {
+                "Name": "minecraft:dirt"
+            }
+        },
+        "stun": 10,
+		"gain_food_level": 2,
+		"gain_saturation": 2
+    }
+}

@@ -2,9 +2,9 @@
     "entity_type": "minecraft:blaze",
     "grant":
     [
-        "bmorph:flying",
+        "bmorph:slow_flying",
         "bmorph:fire_blaze",
-        "bmorph:no_fire_damage",
+        "#bmorph:fire_immunity",
         "bmorph:water_dislike"
     ],
     "revoke":

@@ -1,0 +1,8 @@
+{
+  "condition": "bmorph:player_attributes",
+    "player_health":
+    {
+      "min": 0,
+      "max": 150
+    }
+}

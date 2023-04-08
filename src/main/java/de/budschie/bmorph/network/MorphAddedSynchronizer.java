@@ -1,32 +1,39 @@
 package de.budschie.bmorph.network;
 
-import java.util.Optional;
+import java.text.MessageFormat;
 import java.util.UUID;
 import java.util.function.Supplier;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import de.budschie.bmorph.capabilities.IMorphCapability;
 import de.budschie.bmorph.capabilities.MorphCapabilityAttacher;
+import de.budschie.bmorph.gui.MorphGuiHandler;
 import de.budschie.bmorph.morph.MorphHandler;
 import de.budschie.bmorph.morph.MorphItem;
 import de.budschie.bmorph.network.MorphAddedSynchronizer.MorphAddedPacket;
 import net.minecraft.client.Minecraft;
-import net.minecraft.network.PacketBuffer;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.common.util.LazyOptional;
-import net.minecraftforge.fml.network.NetworkEvent.Context;
+import net.minecraftforge.network.NetworkEvent.Context;
 
 public class MorphAddedSynchronizer implements ISimpleImplPacket<MorphAddedPacket>
 {
+	private static final Logger LOGGER = LogManager.getLogger();
+	
 	@Override
-	public void encode(MorphAddedPacket packet, PacketBuffer buffer)
+	public void encode(MorphAddedPacket packet, FriendlyByteBuf buffer)
 	{
-		buffer.writeUniqueId(packet.getPlayerUUID());
-		buffer.writeCompoundTag(packet.getAddedMorph().serialize());
+		buffer.writeUUID(packet.getPlayerUUID());
+		buffer.writeNbt(packet.getAddedMorph().serialize());
 	}
 
 	@Override
-	public MorphAddedPacket decode(PacketBuffer buffer)
+	public MorphAddedPacket decode(FriendlyByteBuf buffer)
 	{
-		return new MorphAddedPacket(buffer.readUniqueId(), MorphHandler.deserializeMorphItem(buffer.readCompoundTag()));
+		return new MorphAddedPacket(buffer.readUUID(), MorphHandler.deserializeMorphItem(buffer.readNbt()));
 	}
 
 	@Override
@@ -34,13 +41,28 @@ public class MorphAddedSynchronizer implements ISimpleImplPacket<MorphAddedPacke
 	{
 		ctx.get().enqueueWork(() ->
 		{
-			LazyOptional<IMorphCapability> cap = Minecraft.getInstance().world.getPlayerByUuid(packet.getPlayerUUID()).getCapability(MorphCapabilityAttacher.MORPH_CAP);
-			
-			if(cap.isPresent())
+			if(Minecraft.getInstance().level != null)
 			{
-				IMorphCapability resolved = cap.resolve().get();
+				Player player = Minecraft.getInstance().level.getPlayerByUUID(packet.getPlayerUUID());
 				
-				resolved.addToMorphList(packet.getAddedMorph());
+				if(player == null)
+				{
+					LOGGER.warn(MessageFormat.format("Player {0} not known to client. Ignoring this packet.", packet.getPlayerUUID()));
+				}
+				else
+				{
+					LazyOptional<IMorphCapability> cap = player.getCapability(MorphCapabilityAttacher.MORPH_CAP);
+					
+					if(cap.isPresent())
+					{
+						IMorphCapability resolved = cap.resolve().get();
+						
+						resolved.addMorphItem(packet.getAddedMorph());
+					}
+					
+					MorphGuiHandler.updateMorphUi();
+				}
+				ctx.get().setPacketHandled(true);
 			}
 		});
 	}

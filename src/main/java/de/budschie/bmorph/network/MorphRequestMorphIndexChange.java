@@ -1,81 +1,109 @@
 package de.budschie.bmorph.network;
 
 import java.util.Optional;
+import java.util.UUID;
 import java.util.function.Supplier;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.slf4j.helpers.MessageFormatter;
 
 import de.budschie.bmorph.capabilities.IMorphCapability;
 import de.budschie.bmorph.capabilities.MorphCapabilityAttacher;
-import de.budschie.bmorph.capabilities.blacklist.BlacklistData;
-import de.budschie.bmorph.capabilities.blacklist.ConfigManager;
+import de.budschie.bmorph.morph.MorphItem;
+import de.budschie.bmorph.morph.MorphReasonRegistry;
 import de.budschie.bmorph.morph.MorphUtil;
 import de.budschie.bmorph.network.MorphRequestMorphIndexChange.RequestMorphIndexChangePacket;
-import net.minecraft.network.PacketBuffer;
-import net.minecraft.util.ResourceLocation;
-import net.minecraft.util.Util;
-import net.minecraft.util.text.StringTextComponent;
-import net.minecraft.util.text.TextFormatting;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraftforge.common.util.LazyOptional;
-import net.minecraftforge.fml.network.NetworkEvent.Context;
+import net.minecraftforge.network.NetworkEvent.Context;
 
 public class MorphRequestMorphIndexChange implements ISimpleImplPacket<RequestMorphIndexChangePacket>
 {
+	private static final Logger LOGGER = LogManager.getLogger();
+	
 	@Override
-	public void encode(RequestMorphIndexChangePacket packet, PacketBuffer buffer)
+	public void encode(RequestMorphIndexChangePacket packet, FriendlyByteBuf buffer)
 	{
-		buffer.writeInt(packet.requestedIndex);
+		buffer.writeBoolean(packet.getRequestedItem().isPresent());
+		packet.getRequestedItem().ifPresent(buffer::writeUUID);
 	}
 
 	@Override
-	public RequestMorphIndexChangePacket decode(PacketBuffer buffer)
+	public RequestMorphIndexChangePacket decode(FriendlyByteBuf buffer)
 	{
-		return new RequestMorphIndexChangePacket(buffer.readInt());
+		boolean requestedItemPresent = buffer.readBoolean();		
+		Optional<UUID> item = Optional.empty();
+		
+		if(requestedItemPresent)
+		{
+			item = Optional.of(buffer.readUUID());
+		}
+		
+		return new RequestMorphIndexChangePacket(item);
 	}
 
 	@Override
 	public void handle(RequestMorphIndexChangePacket packet, Supplier<Context> ctx)
 	{
 		ctx.get().enqueueWork(() ->
-		{
-			LazyOptional<IMorphCapability> cap = ctx.get().getSender().getCapability(MorphCapabilityAttacher.MORPH_CAP);
-			
-			if(cap.isPresent())
-			{
-				IMorphCapability resolved = cap.resolve().get();
+		{			
+				LazyOptional<IMorphCapability> cap = ctx.get().getSender().getCapability(MorphCapabilityAttacher.MORPH_CAP);
 				
-				if(packet.getRequestedIndex() == -1)
+				if(cap.isPresent())
 				{
-					MorphUtil.morphToServer(Optional.empty(), Optional.empty(), ctx.get().getSender());
-				}
-				else if(packet.getRequestedIndex() >= resolved.getMorphList().getMorphArrayList().size() || packet.getRequestedIndex() < 0)
-				{
-					System.out.println("Player " + ctx.get().getSender().getName().getString() + " with UUID " + ctx.get().getSender().getUniqueID() + " has tried to send invalid data!");
-				}
-				else
-				{
-					ResourceLocation morphToRS = resolved.getMorphList().getMorphArrayList().get(packet.getRequestedIndex()).getEntityType().getRegistryName();
-					boolean shouldMorph = !ConfigManager.INSTANCE.get(BlacklistData.class).isInBlacklist(morphToRS);
+					IMorphCapability resolved = cap.resolve().get();
 					
-					if(shouldMorph)
-						MorphUtil.morphToServer(Optional.empty(), Optional.of(packet.getRequestedIndex()), ctx.get().getSender());
+					Optional<MorphItem> morphItem = Optional.empty();
+					
+					if(packet.getRequestedItem().isPresent())
+					{
+						morphItem = resolved.getMorphList().getMorphByUUID(packet.getRequestedItem().get());
+					}
+					
+					if(morphItem.isPresent())
+					{
+						// Optional<Integer> indexOfItem = resolved.getMorphList().indexOf(morphItem.get());
+						boolean hasMorph = resolved.getMorphList().contains(morphItem.get());
+						
+						if(hasMorph)
+						{
+							MorphUtil.morphToServer(morphItem, MorphReasonRegistry.MORPHED_BY_UI.get(), ctx.get().getSender());
+						}
+						else
+						{
+							LOGGER.warn(MessageFormatter.arrayFormat("Player {0} with UUID {1} tried to morph into an entity which they do not posses. Morph: {2}", 
+								new Object[]
+								{
+									ctx.get().getSender().getGameProfile().getName(), 
+									ctx.get().getSender().getStringUUID(), 
+									packet.getRequestedItem().get().toString()
+								}
+							));
+						}
+					}
 					else
-						ctx.get().getSender().sendMessage(new StringTextComponent(TextFormatting.RED + "I'm sorry but you can't morph into " + morphToRS.toString() + " as this entity is currently blacklisted."), Util.DUMMY_UUID);
+					{
+						MorphUtil.morphToServer(Optional.empty(), MorphReasonRegistry.MORPHED_BY_UI.get(), ctx.get().getSender());
+					}
 				}
-			}
+						
+			ctx.get().setPacketHandled(true);
 		});
 	}
 	
 	public static class RequestMorphIndexChangePacket
 	{
-		int requestedIndex;
+		private Optional<UUID> requestedItem;
 		
-		public RequestMorphIndexChangePacket(int requestedIndex)
+		public RequestMorphIndexChangePacket(Optional<UUID> requestedItem)
 		{
-			this.requestedIndex = requestedIndex;
+			this.requestedItem = requestedItem;
 		}
 		
-		public int getRequestedIndex()
+		public Optional<UUID> getRequestedItem()
 		{
-			return requestedIndex;
+			return requestedItem;
 		}
 	}
 }

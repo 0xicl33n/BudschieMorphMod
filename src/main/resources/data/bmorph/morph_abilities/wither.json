@@ -1,0 +1,19 @@
+{
+    "entity_type": "minecraft:wither",
+    "grant":
+    [
+        "bmorph:slow_flying",
+        "#bmorph:fire_immunity",
+        "bmorph:wither_skull_yeet",
+        "bmorph:wither_on_hit",
+        "bmorph:disable_wither",
+        "bmorph:wither_bossbar",
+        "bmorph:no_wither_damage",
+        "bmorph:wither_enabled_visuals",
+        "bmorph:wither_arrow_immune_on_low_health"
+    ],
+    "revoke":
+    [
+
+    ]
+}

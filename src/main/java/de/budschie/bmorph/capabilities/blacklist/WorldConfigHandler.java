@@ -4,9 +4,9 @@ import java.io.File;
 import java.io.IOException;
 
 import de.budschie.bmorph.main.ServerSetup;
-import net.minecraft.nbt.CompoundNBT;
-import net.minecraft.nbt.CompressedStreamTools;
-import net.minecraft.nbt.NBTUtil;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtIo;
+import net.minecraft.server.MinecraftServer;
 
 public abstract class WorldConfigHandler
 {
@@ -17,18 +17,18 @@ public abstract class WorldConfigHandler
 		this.path = path;
 	}
 	
-	public abstract void read(CompoundNBT data);
-	public abstract CompoundNBT write();
+	public abstract void read(CompoundTag data);
+	public abstract CompoundTag write();
 	
-	public void readFromFile()
+	public void readFromFile(MinecraftServer server)
 	{
-		File resolvedPath = new File(ServerSetup.server.anvilConverterForAnvilFile.getWorldDir().toFile(), "morph_blacklist.dat");
+		File resolvedPath = new File(server.storageSource.getWorldDir().toFile(), "morph_blacklist.dat");
 		
 		if(resolvedPath.exists())
 		{
 			try
 			{
-				CompoundNBT data = CompressedStreamTools.read(resolvedPath);
+				CompoundTag data = NbtIo.read(resolvedPath);
 				
 				read(data);
 			} 
@@ -39,15 +39,15 @@ public abstract class WorldConfigHandler
 		}
 	}
 	
-	public void writeToFile()
+	public void writeToFile(MinecraftServer server)
 	{
-		File resolvedPath = new File(ServerSetup.server.anvilConverterForAnvilFile.getWorldDir().toFile(), "morph_blacklist.dat");
+		File resolvedPath = new File(server.storageSource.getWorldDir().toFile(), "morph_blacklist.dat");
 		
-		CompoundNBT serialized = write();
+		CompoundTag serialized = write();
 		
 		try
 		{
-			CompressedStreamTools.write(serialized, resolvedPath);
+			NbtIo.write(serialized, resolvedPath);
 		} 
 		catch (IOException e)
 		{

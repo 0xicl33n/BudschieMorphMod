@@ -1,0 +1,12 @@
+{
+    "entity_type": "minecraft:stray",
+    "grant":
+    [
+        "bmorph:no_freezing",
+        "bmorph:burn_in_sun"
+    ],
+    "revoke":
+    [
+        
+    ]
+}

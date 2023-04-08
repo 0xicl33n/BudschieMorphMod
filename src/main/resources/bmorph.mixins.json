@@ -1,10 +1,23 @@
 {
 	"required": true,
 	"package": "de.budschie.bmorph.mixin",
-	"compatibilityLevel": "JAVA_8",
+	"compatibilityLevel": "JAVA_17",
 	"refmap": "bmorph.refmap.json",
 	"client": [
-        "PlayerRendererMixin"
+        "PlayerRendererMixin",
+		"EntityMixin",
+		"PlayerMixin",
+		"LocalPlayerMixin"
+	],
+	"mixins": [
+		"PlayerSoundMixin",
+		"LookAtGoalMixin",
+		"MotionMultiplierMixin",
+		"PowderSnowBlockMixin",
+		"IsHostileMixin",
+		"LivingEntityStandOnFluidMixin",
+		"FireImmunityMixin",
+		"LivingEntitySoundMixin"
 	],
 	"minVersion": "0.8"
 }
